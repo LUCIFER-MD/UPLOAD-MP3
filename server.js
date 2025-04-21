@@ -1,16 +1,16 @@
 const express = require('express');
 const multer = require('multer');
 const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
-const { Boom } = require('@hapi/boom');
+const crypto = require('crypto');
 
 const { state, saveState } = useSingleFileAuthState('./auth_info.json');
 const app = express();
 const port = 3000;
 
 let sock;
+let pairingCode = null;
 
 // Multer for audio upload
 const storage = multer.diskStorage({
@@ -22,29 +22,40 @@ const upload = multer({ storage });
 // Serve static files
 app.use(express.static('public'));
 
-// Start WhatsApp connection and show QR
-app.get('/qr', async (req, res) => {
-    sock = makeWASocket({ auth: state });
+// Generate a pairing code (unique)
+function generatePairingCode() {
+    return crypto.randomBytes(4).toString('hex'); // Generates 8-character pair code
+}
 
-    sock.ev.on('connection.update', async ({ connection, qr, lastDisconnect }) => {
-        if (qr) {
-            qrcode.toDataURL(qr, (err, url) => {
-                res.send(`<img src="${url}"><p>Scan this QR code with WhatsApp</p>`);
-            });
-        }
+// Endpoint to generate pair code
+app.get('/pair-code', (req, res) => {
+    pairingCode = generatePairingCode();
+    res.send(`Your pairing code: ${pairingCode}`);
+});
 
-        if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) {
-                makeWASocket({ auth: state });
+// Endpoint to pair the device using the pair code
+app.post('/pair', (req, res) => {
+    const { code } = req.body;
+    
+    if (code === pairingCode) {
+        sock = makeWASocket({ auth: state });
+
+        sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
+            if (connection === 'open') {
+                saveState();
+                res.send("✅ Pairing successful! Device is now paired.");
+            } else if (connection === 'close') {
+                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+                if (shouldReconnect) {
+                    makeWASocket({ auth: state });
+                }
             }
-        } else if (connection === 'open') {
-            saveState();
-            console.log("✅ WhatsApp connected");
-        }
-    });
+        });
 
-    sock.ev.on('creds.update', saveState);
+        sock.ev.on('creds.update', saveState);
+    } else {
+        res.status(400).send('❌ Invalid pairing code');
+    }
 });
 
 // Upload audio & send to WhatsApp
