@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head><title>WhatsApp Audio Uploader</title></head>
+<body>
+    <h2>📱 Pair WhatsApp</h2>
+    <a href="/qr" target="_blank">Click here to scan QR Code</a>
+
+    <h2>🎵 Upload and Send Audio</h2>
+    <form action="/upload" method="POST" enctype="multipart/form-data">
+        <input type="file" name="audio" accept="audio/*" required />
+        <button type="submit">Send to WhatsApp</button>
+    </form>
+</body>
+</html>
