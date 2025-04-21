@@ -1,16 +1,19 @@
 const express = require('express');
 const multer = require('multer');
-const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const { state, saveState } = useSingleFileAuthState('./auth_info.json');
 const app = express();
 const port = 3000;
 
 let sock;
 let pairingCode = null;
+
+// Set up auth directory and file storage
+const authDir = './auth_info';
+const { state, saveState } = useMultiFileAuthState(authDir);
 
 // Multer for audio upload
 const storage = multer.diskStorage({
@@ -38,7 +41,10 @@ app.post('/pair', (req, res) => {
     const { code } = req.body;
     
     if (code === pairingCode) {
-        sock = makeWASocket({ auth: state });
+        sock = makeWASocket({
+            auth: state,
+            printQRInTerminal: false
+        });
 
         sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
             if (connection === 'open') {
